@@ -10,6 +10,8 @@ use crate::session::turn_context::TurnEnvironment;
 use crate::tools::context::FunctionToolOutput;
 use crate::tools::context::ToolOutput;
 use crate::tools::context::ToolPayload;
+use codex_model_provider_info::AMAZON_BEDROCK_PROVIDER_ID;
+use codex_model_provider_info::OPENAI_PROVIDER_ID;
 use codex_models_manager::manager::RefreshStrategy;
 use codex_protocol::AgentPath;
 use codex_protocol::ThreadId;
@@ -269,13 +271,26 @@ pub(crate) fn apply_spawn_agent_runtime_overrides(
     Ok(())
 }
 
-pub(crate) async fn apply_requested_spawn_agent_model_overrides(
+pub(crate) async fn apply_spawn_agent_model_selection(
     session: &Session,
     turn: &TurnContext,
     config: &mut Config,
     requested_model: Option<&str>,
     requested_reasoning_effort: Option<ReasoningEffort>,
 ) -> Result<(), FunctionCallError> {
+    if let Some(provider_id) = turn.config.agent_default_subagent_model_provider.as_deref() {
+        config.model_provider = config
+            .model_providers
+            .get(provider_id)
+            .cloned()
+            .ok_or_else(|| {
+                FunctionCallError::RespondToModel(format!(
+                    "Default subagent model provider `{provider_id}` not found"
+                ))
+            })?;
+        config.model_provider_id = provider_id.to_string();
+    }
+
     let requested_model = requested_model.or(turn.config.agent_default_subagent_model.as_deref());
     let requested_reasoning_effort = requested_reasoning_effort
         .or_else(|| turn.config.agent_default_subagent_reasoning_effort.clone());
@@ -284,16 +299,21 @@ pub(crate) async fn apply_requested_spawn_agent_model_overrides(
     }
 
     if let Some(requested_model) = requested_model {
-        let available_models = session
-            .services
-            .models_manager
-            .list_models(RefreshStrategy::Offline, config.http_client_factory())
-            .await;
-        let selected_model_name = find_spawn_agent_model_name(
-            &available_models,
-            requested_model,
-            turn.multi_agent_version,
-        )?;
+        let selected_model_name = if provider_uses_managed_model_catalog(&config.model_provider_id)
+        {
+            let available_models = session
+                .services
+                .models_manager
+                .list_models(RefreshStrategy::Offline, config.http_client_factory())
+                .await;
+            find_spawn_agent_model_name(
+                &available_models,
+                requested_model,
+                turn.multi_agent_version,
+            )?
+        } else {
+            requested_model.to_string()
+        };
         let selected_model_info = session
             .services
             .models_manager
@@ -302,11 +322,13 @@ pub(crate) async fn apply_requested_spawn_agent_model_overrides(
 
         config.model = Some(selected_model_name.clone());
         if let Some(reasoning_effort) = requested_reasoning_effort {
-            validate_spawn_agent_reasoning_effort(
-                &selected_model_name,
-                &selected_model_info.supported_reasoning_levels,
-                &reasoning_effort,
-            )?;
+            if !selected_model_info.used_fallback_model_metadata {
+                validate_spawn_agent_reasoning_effort(
+                    &selected_model_name,
+                    &selected_model_info.supported_reasoning_levels,
+                    &reasoning_effort,
+                )?;
+            }
             config.model_reasoning_effort = Some(reasoning_effort);
         } else {
             config.model_reasoning_effort = selected_model_info.default_reasoning_level;
@@ -325,6 +347,10 @@ pub(crate) async fn apply_requested_spawn_agent_model_overrides(
     }
 
     Ok(())
+}
+
+fn provider_uses_managed_model_catalog(provider_id: &str) -> bool {
+    matches!(provider_id, OPENAI_PROVIDER_ID | AMAZON_BEDROCK_PROVIDER_ID)
 }
 
 pub(crate) async fn apply_spawn_agent_service_tier(

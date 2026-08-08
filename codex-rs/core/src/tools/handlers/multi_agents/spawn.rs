@@ -97,7 +97,7 @@ async fn handle_spawn_agent(
     if args.fork_context {
         reject_full_fork_agent_type_override(role_name)?;
     }
-    apply_requested_spawn_agent_model_overrides(
+    apply_spawn_agent_model_selection(
         &session,
         turn.as_ref(),
         &mut config,

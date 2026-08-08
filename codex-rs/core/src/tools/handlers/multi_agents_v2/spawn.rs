@@ -69,7 +69,7 @@ async fn handle_spawn_agent(
         config.service_tier = Some(service_tier.clone());
     }
     let is_full_history_fork = matches!(fork_mode, Some(SpawnAgentForkMode::FullHistory));
-    apply_requested_spawn_agent_model_overrides(
+    apply_spawn_agent_model_selection(
         &session,
         turn.as_ref(),
         &mut config,

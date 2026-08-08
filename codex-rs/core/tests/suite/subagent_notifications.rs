@@ -1316,6 +1316,29 @@ async fn spawn_agent_uses_configured_subagent_defaults() -> Result<()> {
     Ok(())
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn spawn_agent_uses_configured_subagent_provider() -> Result<()> {
+    skip_if_no_network!(Ok(()));
+
+    let server = start_mock_server().await;
+    let child_snapshot =
+        spawn_child_and_capture_snapshot(&server, json!({ "message": CHILD_PROMPT }), |builder| {
+            builder.with_config(|config| {
+                let provider_id = "subagent-provider";
+                config
+                    .model_providers
+                    .insert(provider_id.to_string(), config.model_provider.clone());
+                config.agent_default_subagent_model_provider = Some(provider_id.to_string());
+                config.agent_default_subagent_model = Some("provider-specific-model".to_string());
+            })
+        })
+        .await?;
+
+    assert_eq!(child_snapshot.model_provider_id, "subagent-provider");
+    assert_eq!(child_snapshot.model, "provider-specific-model");
+    Ok(())
+}
+
 #[test_case(
     Some(REQUESTED_MODEL),
     None,
@@ -1940,6 +1963,7 @@ async fn spawn_agent_role_overrides_requested_model_and_reasoning_settings() -> 
     skip_if_no_network!(Ok(()));
 
     let server = start_mock_server().await;
+    let role_provider_base_url = server.uri();
     let child_snapshot = spawn_child_and_capture_snapshot(
         &server,
         json!({
@@ -1949,12 +1973,19 @@ async fn spawn_agent_role_overrides_requested_model_and_reasoning_settings() -> 
             "reasoning_effort": REQUESTED_REASONING_EFFORT,
         }),
         |builder| {
-            builder.with_config(|config| {
+            builder.with_config(move |config| {
+                let default_provider_id = "default-subagent-provider";
+                config.model_providers.insert(
+                    default_provider_id.to_string(),
+                    config.model_provider.clone(),
+                );
+                config.agent_default_subagent_model_provider =
+                    Some(default_provider_id.to_string());
                 let role_path = config.codex_home.join("custom-role.toml");
                 std::fs::write(
                     &role_path,
                     format!(
-                        "model = \"{ROLE_MODEL}\"\nmodel_reasoning_effort = \"{ROLE_REASONING_EFFORT}\"\n",
+                        "model = \"{ROLE_MODEL}\"\nmodel_reasoning_effort = \"{ROLE_REASONING_EFFORT}\"\nmodel_provider = \"role-provider\"\n\n[model_providers.role-provider]\nname = \"role-provider\"\nbase_url = \"{role_provider_base_url}\"\nenv_key = \"PATH\"\nwire_api = \"responses\"\n",
                     ),
                 )
                 .expect("write role config");
@@ -1972,6 +2003,7 @@ async fn spawn_agent_role_overrides_requested_model_and_reasoning_settings() -> 
     .await?;
 
     assert_eq!(child_snapshot.model, ROLE_MODEL);
+    assert_eq!(child_snapshot.model_provider_id, "role-provider");
     assert_eq!(child_snapshot.reasoning_effort, Some(ROLE_REASONING_EFFORT));
 
     Ok(())
@@ -2002,6 +2034,7 @@ async fn spawn_agent_preserves_configured_defaults_through_unrelated_role() -> R
                     },
                 );
                 config.agent_default_subagent_model = Some(REQUESTED_MODEL.to_string());
+                config.agent_default_subagent_model_provider = Some("openai".to_string());
                 config.agent_default_subagent_reasoning_effort = Some(REQUESTED_REASONING_EFFORT);
             })
         },
@@ -2015,6 +2048,7 @@ async fn spawn_agent_preserves_configured_defaults_through_unrelated_role() -> R
             Some(REQUESTED_REASONING_EFFORT)
         )
     );
+    assert_eq!(child_snapshot.model_provider_id, "openai");
     Ok(())
 }
 
