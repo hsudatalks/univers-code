@@ -698,6 +698,8 @@ pub struct AgentsToml {
     pub max_depth: Option<i32>,
     /// Default model for spawned subagents when the spawn call does not select one.
     pub default_subagent_model: Option<String>,
+    /// Default model provider for spawned subagents.
+    pub default_subagent_model_provider: Option<String>,
     /// Default reasoning effort for spawned subagents when the spawn call does not select one.
     pub default_subagent_reasoning_effort: Option<ReasoningEffort>,
     /// Removed agent-job setting retained as a no-op for compatibility.

@@ -40,6 +40,10 @@
           "description": "Default model for spawned subagents when the spawn call does not select one.",
           "type": "string"
         },
+        "default_subagent_model_provider": {
+          "description": "Default model provider for spawned subagents.",
+          "type": "string"
+        },
         "default_subagent_reasoning_effort": {
           "allOf": [
             {

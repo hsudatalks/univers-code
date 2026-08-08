@@ -886,6 +886,9 @@ pub struct Config {
     /// Default model for spawned subagents when the spawn call does not select one.
     pub agent_default_subagent_model: Option<String>,
 
+    /// Default model provider for spawned subagents.
+    pub agent_default_subagent_model_provider: Option<String>,
+
     /// Default reasoning effort for spawned subagents when the spawn call does not select one.
     pub agent_default_subagent_reasoning_effort: Option<ReasoningEffort>,
 
@@ -3840,6 +3843,18 @@ impl Config {
             .agents
             .as_ref()
             .and_then(|agents| agents.default_subagent_model.clone());
+        let agent_default_subagent_model_provider = cfg
+            .agents
+            .as_ref()
+            .and_then(|agents| agents.default_subagent_model_provider.clone());
+        if let Some(provider_id) = agent_default_subagent_model_provider.as_deref()
+            && !model_providers.contains_key(provider_id)
+        {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                format!("Default subagent model provider `{provider_id}` not found"),
+            ));
+        }
         let agent_default_subagent_reasoning_effort = cfg
             .agents
             .as_ref()
@@ -4190,6 +4205,7 @@ impl Config {
             agents_enabled,
             agent_max_threads,
             agent_default_subagent_model,
+            agent_default_subagent_model_provider,
             agent_default_subagent_reasoning_effort,
             agent_max_depth,
             agent_roles,

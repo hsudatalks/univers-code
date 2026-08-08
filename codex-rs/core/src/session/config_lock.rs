@@ -208,6 +208,7 @@ fn save_config_resolved_fields(
     agents.max_concurrent_threads_per_session = config.agent_max_threads;
     agents.max_depth = Some(config.agent_max_depth);
     agents.default_subagent_model = config.agent_default_subagent_model.clone();
+    agents.default_subagent_model_provider = config.agent_default_subagent_model_provider.clone();
     agents.default_subagent_reasoning_effort =
         config.agent_default_subagent_reasoning_effort.clone();
     agents.interrupt_message = Some(config.agent_interrupt_message_enabled);
@@ -287,6 +288,7 @@ mod tests {
         config.tool_registry.turn_metadata_includes_tool_info = true;
         config.multi_agent_v2.subagent_developer_instructions =
             Some("Locked subagent developer instructions.".to_string());
+        config.agent_default_subagent_model_provider = Some("openai".to_string());
         config.token_budget = Some(crate::config::TokenBudgetConfig {
             reminder_threshold_tokens: Some(16_000),
             reminder_message_template: "Locked reminder: {n_remaining} tokens.".to_string(),
@@ -337,6 +339,12 @@ mod tests {
                 .is_none_or(|debug| debug.config_lockfile.is_none())
         );
         assert!(lock.memories.is_some());
+        assert_eq!(
+            lock.agents
+                .as_ref()
+                .and_then(|agents| agents.default_subagent_model_provider.as_deref()),
+            Some("openai")
+        );
         let features = lock
             .features
             .as_ref()
