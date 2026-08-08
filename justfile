@@ -16,6 +16,11 @@ alias c := codex
 codex *args:
     cargo run --bin codex -- {args}
 
+# `univers-code`
+alias uc := univers-code
+univers-code *args:
+    cargo run --bin univers-code -- {args}
+
 # `codex exec`
 exec *args:
     cargo run --bin codex -- exec {args}
